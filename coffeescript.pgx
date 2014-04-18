@@ -1,0 +1,749 @@
+%grammar cafescript
+
+program: TERMINATOR? - toplevelBlock?
+
+toplevelBlock:
+  toplevelStatement
+  (- TERMINATOR - toplevelStatement)*
+  TERMINATOR?
+
+block:
+  statement
+  (- TERMINATOR - statement)*
+  TERMINATOR?
+
+statement:
+  | expression
+  | return
+  | continue
+  | break
+  | throw
+  | debugger
+
+expression:
+  expressionworthy | seqExpression
+
+secondaryStatement:
+  | secondaryExpression
+  | return
+  | continue
+  | break
+  | throw
+  | debugger
+
+# secondaryExpression forbids anything lower precedence than
+# assignmentExpression
+secondaryExpression:
+  expressionworthy | assignmentExpression
+
+secondaryExpressionNoImplicitObjectCall:
+  expressionworthy | assignmentExpressionNoImplicitObjectCall
+
+# TODO: rename?
+expressionworthy:
+  | functionLiteral
+  | conditional
+  | while
+  | loop
+  | try
+  | forOf
+  | forIn
+  | switch
+  | implicitObjectLiteral
+  | class
+
+seqExpression:
+  postfixControlFlowExpression
+  (- ';' TERMINATOR? - expression)?
+
+postfixControlFlowExpression:
+  secondaryStatement
+  (- postfixControlFlowOp)*
+
+postfixControlFlowOp:
+  | (IF | UNLESS) - assignmentExpression
+  | (WHILE | UNTIL) - assignmentExpression
+  | FOR - (Assignable - (',' - Assignable -)?)?
+    IN - assignmentExpression (- BY - assignmentExpression)?
+    (- WHEN - assignmentExpression)?
+  | FOR - (OWN -)? Assignable - (',' - Assignable -)?
+    OF - assignmentExpression
+    (- WHEN - assignmentExpression)?
+
+assignmentExpression:
+  | assignmentOp
+  | compoundAssignmentOp
+  | existsAssignmentOp
+  | binaryExpression
+
+assignmentOp:
+  Assignable - '=' !EQUAL
+  ( TERMINDENT secondaryExpression DEDENT
+  | TERMINATOR? - secondaryExpression
+  )
+
+compoundAssignmentOp:
+  CompoundAssignable - !QMARK CompoundAssignmentOperators '='
+  ( TERMINDENT secondaryExpression DEDENT
+  | TERMINATOR? - secondaryExpression
+  )
+
+CompoundAssignmentOperators:
+  (
+  | '&&'
+  | AND
+  | '||'
+  | OR
+  | '**'
+  | /[ QMARK AMP HAT PIPE STAR SLASH PERCENT ]/
+  | '+' !PLUS
+  | '-' !DASH
+  | '<<'
+  | '>>>'
+  | '>>'
+  )
+
+existsAssignmentOp:
+  ExistsAssignable - '?=' -
+  (
+  | TERMINDENT secondaryExpression DEDENT
+  | TERMINATOR? - secondaryExpression
+  )
+
+assignmentExpressionNoImplicitObjectCall:
+  | assignmentOpNoImplicitObjectCall
+  | compoundAssignmentOpNoImplicitObjectCall
+  | existsAssignmentOpNoImplicitObjectCall
+  | binaryExpressionNoImplicitObjectCall
+
+assignmentOpNoImplicitObjectCall:
+  Assignable - '=' !EQUAL
+  ( TERMINDENT secondaryExpressionNoImplicitObjectCall DEDENT
+  | TERMINATOR? - secondaryExpressionNoImplicitObjectCall
+  )
+
+compoundAssignmentOpNoImplicitObjectCall:
+  CompoundAssignable - !QMARK CompoundAssignmentOperators '='
+  ( TERMINDENT secondaryExpressionNoImplicitObjectCall DEDENT
+  | TERMINATOR? - secondaryExpressionNoImplicitObjectCall
+  )
+
+existsAssignmentOpNoImplicitObjectCall:
+  ExistsAssignable - '?=' -
+  ( TERMINDENT secondaryExpressionNoImplicitObjectCall DEDENT
+  | TERMINATOR? - secondaryExpressionNoImplicitObjectCall
+  )
+
+binaryExpression:
+  prefixExpression
+  (- binaryOperator TERMINATOR? - (expressionworthy | prefixExpression))*
+
+binaryOperator:
+  | (CompoundAssignmentOperators !EQUAL)
+  | '<='
+  | '>='
+  | '<'
+  | '>'
+  | '=='
+  | IS
+  | '!='
+  | ISNT
+  | EXTENDS
+  | INSTANCEOF
+  | IN
+  | OF
+  | NOT - (INSTANCEOF | IN | OF)
+
+binaryExpressionNoImplicitObjectCall:
+  prefixExpressionNoImplicitObjectCall
+  (-
+    binaryOperator TERMINATOR? -
+    (expressionworthy | prefixExpressionNoImplicitObjectCall)
+  )*
+
+prefixExpression:
+  | postfixExpression
+  | DO - (nfe | expressionworthy | prefixExpression)
+  | (PrefixOperators -)+ (expressionworthy | prefixExpression)
+
+PrefixOperators:
+  | '++'
+  | '--'
+  | '+'
+  | '-'
+  | '!'
+  | NOT
+  | '~'
+  | DO
+  | TYPEOF
+  | DELETE
+
+nfe: !unassignable Assignable - '=' - functionLiteral
+
+prefixExpressionNoImplicitObjectCall:
+  | postfixExpressionNoImplicitObjectCall
+  | DO - (nfe | expressionworthy | prefixExpressionNoImplicitObjectCall)
+  | (PrefixOperators -)+
+    (expressionworthy | prefixExpressionNoImplicitObjectCall)
+
+postfixExpression:
+  leftHandSideExpression PostfixOperators*
+
+PostfixOperators:
+  | '?'
+  | '[..]'
+  | '++'
+  | '--'
+
+postfixExpressionNoImplicitObjectCall:
+  leftHandSideExpressionNoImplicitObjectCall
+  PostfixOperators*
+
+leftHandSideExpression: callExpression | newExpression
+
+argumentList:
+  '?'? '(' - argumentListContents? - ')'
+
+argumentListContents:
+  | argument (- (',' | TERMINATOR) - argument)* (',' | TERMINATOR)?
+  | TERMINDENT argumentListContents DEDENT TERMINATOR?
+
+argument:
+  | spread
+  | expression
+
+secondaryArgumentList:
+  | + !(/[ PLUS DASH SLASH ]/ +)
+    secondaryArgument
+    (- ',' - TERMINATOR? - secondaryArgument)*
+    (','? TERMINDENT implicitObjectLiteral DEDENT)?
+  | TERMINDENT implicitObjectLiteral DEDENT
+secondaryArgument:
+  | spread
+  | singleLineImplicitObjectLiteral
+  | secondaryExpression
+
+leftHandSideExpressionNoImplicitObjectCall:
+  | callExpressionNoImplicitObjectCall
+  | newExpressionNoImplicitObjectCall
+
+secondaryArgumentListNoImplicitObjectCall:
+  + !(/[ PLUS DASH SLASH ]/ +)
+  secondaryArgumentNoImplicitObjectCall
+  (- ',' - TERMINATOR? - secondaryArgumentNoImplicitObjectCall)*
+
+secondaryArgumentNoImplicitObjectCall:
+  | spreadNoImplicitObjectCall
+  | secondaryExpressionNoImplicitObjectCall
+
+callExpression:
+    memberExpression callExpressionAccesses? ('?'? secondaryArgumentList)?
+
+callExpressionAccesses:
+  | TERMINDENT callExpressionAccesses DEDENT
+  | (argumentList | MemberAccessOps)+ callExpressionAccesses?
+
+callExpressionNoImplicitObjectCall:
+  memberExpressionNoImplicitObjectCall
+  (argumentList | MemberAccessOps)*
+  ('?'? secondaryArgumentListNoImplicitObjectCall)?
+
+newExpression:
+  | memberExpression
+  | NEW + (expressionworthy | newExpression | prefixExpression)
+
+newExpressionNoImplicitObjectCall:
+  | memberExpressionNoImplicitObjectCall
+  | NEW + (
+    | expressionworthy
+    | newExpressionNoImplicitObjectCall
+    | prefixExpressionNoImplicitObjectCall
+  )
+
+memberExpression:
+  ( primaryExpression
+  | NEW + memberExpression argumentList
+  ) MemberAccessOps*
+  | NEW + memberExpression secondaryArgumentList
+
+memberAccess:
+  | ( primaryExpression
+    | NEW + memberExpression argumentList
+    ) (argumentList MemberAccessOps | MemberAccessOps)+
+  | contextVar
+
+MemberNames:
+    identifierName
+
+MemberAccessOps:
+  | TERMINDENT '.' - MemberNames MemberAccessOps* DEDENT
+  | TERMINATOR? - '.' TERMINATOR? - MemberNames
+  | '?.' - MemberNames
+  | '[' - expression - ']'
+  | '?[' - expression - ']'
+  | '::' - MemberNames
+  | '::[' - expression - ']'
+  | '?::' - MemberNames
+  | '?::[' - expression - ']'
+  | '[' - assignmentExpression? - '..' '.'? - assignmentExpression? - ']'
+
+memberExpressionNoImplicitObjectCall:
+  ( primaryExpression
+  | NEW + memberExpressionNoImplicitObjectCall argumentList
+  ) MemberAccessOps*
+  | NEW + memberExpressionNoImplicitObjectCall
+    secondaryArgumentListNoImplicitObjectCall
+
+primaryExpression:
+  | macro
+  | Numbers
+  | bool
+  | null
+  | undefined
+  | contextVar
+  | (THIS | '@')
+  | identifier
+  | range
+  | arrayLiteral
+  | objectLiteral
+  | interpolation
+  | JSLiteral
+  | string
+  | regexp
+  | '(' TERMINDENT expression DEDENT TERMINATOR? ')'
+  | '(' - expression - TERMINATOR? - ')'
+
+contextVar:
+    ('@') MemberNames
+
+JSLiteral: '`' ([^`]*) '`'
+
+spread:
+  postfixExpression '...'
+
+spreadNoImplicitObjectCall:
+  postfixExpressionNoImplicitObjectCall '...'
+
+conditional:
+  (IF | UNLESS) -
+  assignmentExpressionNoImplicitObjectCall conditionalBody elseClause?
+
+conditionalBody:
+  | - TERMINDENT block DEDENT
+  | TERMINATOR? - THEN - statement
+  | - THEN
+
+elseClause: - TERMINATOR? - ELSE elseBody
+
+elseBody: functionBody
+
+while:
+  (WHILE | UNTIL) - assignmentExpressionNoImplicitObjectCall whileBody
+
+whileBody: conditionalBody
+
+loop:
+  LOOP whileBody
+
+try: TRY tryBody catchClause? finallyClause?
+
+tryBody: functionBody
+
+catchClause:
+  TERMINATOR? - CATCH - Assignable? conditionalBody?
+
+finallyClause:
+  TERMINATOR? - FINALLY tryBody?
+
+
+class:
+  CLASS (- Assignable)? (- EXTENDS - extendee)? classBody
+
+extendee: secondaryExpressionNoImplicitObjectCall
+
+classBody:
+  | - TERMINDENT classBlock DEDENT
+  | - THEN - classStatement
+  # TODO: this should produce `null`, but that causes PEG.js to fail the parse
+  | (- THEN)?
+
+classBlock:
+  classStatement (- TERMINATOR - classStatement)* TERMINATOR?
+
+classStatement:
+  | classProtoAssignment
+  | staticAssignment
+  | constructor
+  | expression
+
+constructor:
+  (ObjectInitialiserKeys) - ':' -
+  ( TERMINDENT expression DEDENT
+  | TERMINATOR? - expression
+  )
+
+staticAssignment:
+  contextVar - ':' -
+  ( TERMINDENT expression DEDENT
+  | TERMINATOR? - expression
+  )
+
+classProtoAssignment:
+  ObjectInitialiserKeys - ':' -
+  ( TERMINDENT expression DEDENT
+  | singleLineImplicitObjectLiteral
+  | TERMINATOR? - secondaryExpression
+  )
+
+forBody: conditionalBody
+
+forOf:
+  FOR - (OWN -)? Assignable -
+  (',' - Assignable -)?
+  OF - assignmentExpressionNoImplicitObjectCall -
+  (WHEN - assignmentExpressionNoImplicitObjectCall -)?
+  forBody
+
+forIn:
+  FOR -
+  (Assignable - (',' - Assignable -)?)?
+  IN - assignmentExpressionNoImplicitObjectCall -
+  (BY - assignmentExpressionNoImplicitObjectCall -)?
+  (WHEN - assignmentExpressionNoImplicitObjectCall -)?
+  forBody
+
+switch: SWITCH - (expressionworthy | assignmentExpression)? switchBody
+
+switchBody:
+  | - TERMINDENT switchBlock DEDENT
+  | - THEN - case
+  | - THEN
+
+switchBlock:
+  case
+  (- TERMINATOR - case)*
+  (- TERMINATOR - elseClause)?
+  TERMINATOR?
+
+case: WHEN - caseConditions caseBody
+
+caseCondition: assignmentExpressionNoImplicitObjectCall
+
+caseConditions: caseCondition (- ',' - caseCondition)*
+
+caseBody: conditionalBody
+
+functionLiteral:
+  '(' -
+    (TERMINDENT parameterList DEDENT TERMINATOR | parameterList)? -
+  ')' -)?
+  ('->' | '=>')
+  functionBody?
+
+functionBody:
+  | - TERMINDENT block DEDENT
+  | - statement
+
+parameter:
+  | Assignable - '=' - secondaryExpression
+  | rest
+
+rest: Assignable '...'?
+
+parameterList:
+  parameter (- (',' TERMINATOR? | TERMINATOR) - parameter)*
+
+
+range:
+  '[' - secondaryExpression - '..' '.'? - secondaryExpression - ']'
+
+arrayLiteral:
+  '[' arrayLiteralBody TERMINATOR? - ']'
+
+arrayLiteralBody:
+  | TERMINDENT arrayLiteralMemberList DEDENT
+  | - arrayLiteralMemberList?
+
+arrayLiteralMemberList:
+  arrayLiteralMember -
+  (arrayLiteralMemberSeparator - arrayLiteralMember -)*
+  arrayLiteralMemberSeparator?
+
+arrayLiteralMember:
+  | spread
+  | expression
+  | TERMINDENT implicitObjectLiteral DEDENT
+
+arrayLiteralMemberSeparator:
+  | (TERMINATOR - ','?)
+  | (',' TERMINATOR? -)
+
+# TODO: fix this:
+# (DEDENT ',' TERMINDENT)
+
+
+objectLiteral:
+  '{' objectLiteralBody TERMINATOR? - '}'
+
+objectLiteralBody:
+  | TERMINDENT objectLiteralMemberList DEDENT
+  | - objectLiteralMemberList?
+
+objectLiteralMemberList:
+  objectLiteralMember -
+  (objectLiteralMemberSeparator - objectLiteralMember -)*
+  ','?
+
+objectLiteralMemberSeparator: arrayLiteralMemberSeparator
+
+objectLiteralMember:
+  | implicitObjectLiteralMember
+  | contextVar
+  | ObjectInitialiserKeys
+
+ObjectInitialiserKeys:
+  | identifierName
+  | string
+  | Numbers
+
+implicitObjectLiteral:
+  implicitObjectLiteralMemberList
+
+implicitObjectLiteralMemberList:
+  implicitObjectLiteralMember
+  (implicitObjectLiteralMemberSeparator implicitObjectLiteralMember)*
+
+implicitObjectLiteralMemberSeparator:
+  | TERMINATOR ','? -
+  | - ',' TERMINATOR? -
+
+implicitObjectLiteralMember:
+  ObjectInitialiserKeys - ':' - implicitObjectLiteralMemberValue
+
+implicitObjectLiteralMemberValue:
+  | singleLineImplicitObjectLiteral
+  | expression
+  | TERMINDENT expression DEDENT
+
+singleLineImplicitObjectLiteral:
+  singleLineImplicitObjectLiteralMemberList
+
+singleLineImplicitObjectLiteralMemberList:
+  implicitObjectLiteralMember
+  (
+    singleLineImplicitObjectLiteralMemberSeparator
+    implicitObjectLiteralMember
+  )*
+
+singleLineImplicitObjectLiteralMemberSeparator: - ',' -
+
+macro:
+  | '__LINE__'
+  | '__FILENAME__'
+  | '__DATE__'
+  | '__TIME__'
+  | '__DATETIMEMS__'
+  | '__COFFEE_VERSION__'
+
+
+bool:
+  | (TRUE | YES | ON)
+  | (FALSE | NO | OFF)
+
+
+Numbers:
+  | '0b' bit+
+  | '0o' octalDigit+
+  | '0x' hexDigit+
+  | decimal /[eE] [+-]?/ decimal
+  | decimal
+
+decimal:
+  # trailing and leading radix points are discouraged anyway
+  integer ('.' decimalDigit+)?
+
+integer:
+  | '0'
+  | (/[1-9]/ decimalDigit*)
+
+decimalDigit: /[0-9]/
+hexDigit: /[0-9a-fA-F]/
+octalDigit: /[0-7]/
+bit: /[01]/
+
+
+string:
+  | '"""' (stringData | ''' | ('"' '"'? !DOUBLE))+ '"""'
+  | /'''/ (stringData | '"' | '#' | ( SINGLE? !SINGLE))+ /'''/
+  | '"' (stringData | SINGLE)* '"'
+  | SINGLE (stringData | '"' | '#')* SINGLE
+
+stringData:
+  | [^"'\\#]
+  | UnicodeEscapeSequence
+  | '\x' (hexDigit hexDigit)
+  | '\0' !decimalDigit
+  | '\0' =decimalDigit
+  | '\b'
+  | '\t'
+  | '\n'
+  | '\v'
+  | '\f'
+  | '\r'
+  | '\' .
+  | '#' !LCURLY
+
+interpolation:
+  | '"""'
+      ( (stringData | SINGLE | ('"' '"'? !DOUBLE))+
+      | '#{' - expression - '}'
+      )+
+    '"""'
+  | '"'
+      (
+      | (stringData | SINGLE)+
+      | '#{' - expression - '}'
+      )+
+    '"'
+
+regexp:
+  | '///'
+    ( [ \r\n]+
+    | [^\\/#[ \r\n]+
+    | hereregexpData
+    )+ '///' [gimy]*
+  | '/' (regexpData | /[^/\\[\n]+)* SLASH [gimy]*/
+
+regexpData:
+  | '[' ([^\\\]\n] | regexpData)* ']'
+  | ('\' .)
+
+hereregexpData:
+  | '[' ( hereregexpData | [^\\/\]])* ']'
+  | ('\' .)
+  | (SLASH '/'? !SLASH)
+  | '#' !LCURLY
+  | '#{' - expression - '}'
+
+
+throw: THROW - secondaryExpression
+
+return: RETURN - secondaryExpression?
+
+continue: CONTINUE
+
+break: BREAK
+
+debugger: DEBUGGER
+
+undefined: UNDEFINED
+
+null: NULL
+
+unassignable: ('arguments' | 'eval') !identifierPart
+
+CompoundAssignable:
+  | memberAccess
+  | !unassignable identifier
+
+ExistsAssignable: CompoundAssignable
+
+Assignable:
+  | memberAccess
+  | !unassignable identifier
+  | positionalDestructuring
+  | namedDestructuring
+
+positionalDestructuring:
+  '[' positionalDestructuringBody  TERMINATOR? - ']'
+
+positionalDestructuringBody:
+  | TERMINDENT positionalDestructuringMemberList DEDENT
+  | - positionalDestructuringMemberList?
+
+positionalDestructuringMemberList:
+  positionalDestructuringMember
+  (- ',' - positionalDestructuringMember)*
+
+positionalDestructuringMember: rest | Assignable
+
+namedDestructuring:
+  '{' namedDestructuringBody TERMINATOR? - '}'
+
+namedDestructuringBody:
+  | TERMINDENT namedDestructuringMemberList DEDENT
+  | - namedDestructuringMemberList?
+
+namedDestructuringMemberList:
+  namedDestructuringMember (
+    TERMINATOR? -
+    (',' | TERMINATOR)
+    TERMINATOR? -
+    namedDestructuringMember
+  )*
+
+namedDestructuringMember:
+  | ObjectInitialiserKeys - ':' - Assignable
+  | contextVar
+  | !unassignable identifier
+
+
+identifier: !reserved identifierName
+
+identifierName: identifierStart identifierPart*
+
+identifierStart:
+  | UnicodeLetter
+  | [$_]
+  | UnicodeEscapeSequence
+
+identifierPart:
+  | identifierStart
+# TODO: these produce lists and need to be joined
+  | UnicodeCombiningMark
+  | UnicodeDigit
+  | UnicodeConnectorPunctuation
+  | ZWNJ
+  | ZWJ
+
+
+ws: /whitespace+ (blockComment whitespace+)?/
+
+comment: blockComment | singleLineComment
+
+singleLineComment: '#' (!TERM .)*
+
+blockComment:
+  '###'
+    [^#] ([^#] | '#' '#'? !HASH)*
+  '###'
+
+whitespace:
+  | /[
+      \u0009
+      \u000B
+      \u000C
+      \u0020
+      \u00A0
+      \uFEFF
+      \u1680
+      \u180E
+      \u2000-\u200A
+      \u202F
+      \u205F
+      \u3000
+    ]/
+  | CR # ignored to support windows line endings
+  | (BACK CR? NL)
+
+INDENT: + /\uEFEF/
+
+DEDENT: (TERMINATOR? -) /\uEFFE/
+
+TERM:
+  | (CR? NL)
+  | /\uEFFF/
+
+TERMINATOR: (- comment? TERM blockComment?)+
+
+TERMINDENT: TERMINATOR INDENT
