@@ -7,6 +7,9 @@ toplevelBlock:
   (- TERMINATOR - toplevelStatement)*
   TERMINATOR?
 
+XXX1: (return | continue | break)
+toplevelStatement: !XXX1 statement
+
 block:
   statement
   (- TERMINATOR - statement)*
@@ -95,7 +98,7 @@ CompoundAssignmentOperators:
   | '||'
   | OR
   | '**'
-  | /[ QMARK AMP HAT PIPE STAR SLASH PERCENT ]/
+  | /[ QMARK AMP CARET PIPE STAR SLASH PERCENT ]/
   | '+' !PLUS
   | '-' !DASH
   | '<<'
@@ -316,7 +319,7 @@ primaryExpression:
 contextVar:
     ('@') MemberNames
 
-JSLiteral: / BACKTICK ([^ BACKTICK]*) BACKTICK /
+JSLiteral: / GRAVE ([^ GRAVE]*) GRAVE /
 
 spread:
   postfixExpression '...'
@@ -542,13 +545,14 @@ singleLineImplicitObjectLiteralMemberList:
 
 singleLineImplicitObjectLiteralMemberSeparator: - ',' -
 
-macro:
-  | '__LINE__'
+macro: /(:
+    '__LINE__'
   | '__FILENAME__'
   | '__DATE__'
   | '__TIME__'
   | '__DATETIMEMS__'
   | '__COFFEE_VERSION__'
+)/
 
 
 bool:
@@ -712,32 +716,36 @@ identifier: !reserved identifierName
 identifierName: identifierStart identifierPart*
 
 identifierStart:
-  | UnicodeLetter
-  | /[$_]/
-  | UnicodeEscapeSequence
+#   | UnicodeLetter
+/(: [$_] | UnicodeEscapeSequence)/
 
-identifierPart:
-  | identifierStart
-# TODO: these produce lists and need to be joined
-  | UnicodeCombiningMark
-  | UnicodeDigit
-  | UnicodeConnectorPunctuation
-  | ZWNJ
-  | ZWJ
+identifierPart: / identifierStart /
+
+#   | identifierStart
+# # TODO: these produce lists and need to be joined
+#   | UnicodeCombiningMark
+#   | UnicodeDigit
+#   | UnicodeConnectorPunctuation
+#   | ZWNJ
+#   | ZWJ
 
 
-ws: /whitespace+ (blockComment whitespace+)?/
+ws: /(: whitespace+ (: blockComment whitespace+ )? )/
 
 comment: blockComment | singleLineComment
 
 singleLineComment: '#' (!TERM ANY)*
 
-blockComment:
-  '###'
-    /[^#]/ (/[^#]/ | '#' HASH? !HASH)*
-  '###'
+blockComment: /(:
+  HASH HASH HASH
+    [^ HASH ] ([^ HASH ] | HASH HASH? (! HASH ))*
+  HASH HASH HASH
+)/
 
-whitespace:
+whitespace: / WS /
+
+# XXXXX This seems really weird
+# whitespace:
 #XXXXX   | /[
 #       \u0009
 #       \u000B
@@ -752,17 +760,16 @@ whitespace:
 #       \u205F
 #       \u3000
 #     ]/
-/
-  | CR # ignored to support windows line endings
-  | (BACK CR? NL)
-  /
+# /
+#     CR # ignored to support windows line endings
+#   | ( BACK CR? NL)
+# /
 
 INDENT: + #XXXXX /\uEFEF/
 
 DEDENT: (TERMINATOR? -) #XXXXX /\uEFFE/
 
-# TERM:
-#   | (CR? NL)
+TERM: / (: CR? NL ) /
 #   | /\uEFFF/
 
 TERMINATOR: (- comment? TERM blockComment?)+
